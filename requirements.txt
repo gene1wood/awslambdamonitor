@@ -1,0 +1,10 @@
+ndg-httpsclient
+paramiko
+ecdsa
+pycrypto
+python-whois
+PyYAML
+boto3
+requests
+pyOpenSSL
+pyasn1
