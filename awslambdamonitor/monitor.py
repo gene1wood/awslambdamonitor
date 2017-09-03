@@ -464,6 +464,8 @@ def domain_expiration(config, host):
     """
     name = host
     result = whois(host)
+    if result.expiration_date is None:
+        return (False, name, "Unable to determine expiration of %s" % host)
     logger.debug("Domain %s expires on %s" % (host, result.expiration_date))
     expiration_date = result.expiration_date[0] if type(
         result.expiration_date) == list else result.expiration_date
