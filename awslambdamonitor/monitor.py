@@ -78,7 +78,7 @@ schedules:
       substring: My example substring
     host2.example.com:
     - category: port
-      port: 22
+      port_num: 22
     - category: dns
       hostname: foo.host2.example.com
       ip: 203.0.113.100
