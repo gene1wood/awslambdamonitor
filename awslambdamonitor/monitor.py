@@ -153,6 +153,25 @@ def log(event, success):
     logger.log(logging.INFO if success else logging.ERROR, msg)
 
 
+def retry(max_attempts):
+    """
+    Decorate a function to retry if an exception is found up to max_attempts
+    times
+    
+    :param max_attempts: 
+    :return: 
+    """
+    def attempt_run(func):
+        def f(*args, **kwargs):
+            for attempt_number in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except:
+                    pass
+        return f
+    return attempt_run
+
+
 def check_expiration_date(asn1, name, threshold):
     """
     Check a certificate expiration date in ASN.1 GENERALIZEDTIME format to
@@ -197,6 +216,7 @@ def check_expiration_date(asn1, name, threshold):
                 % (name, expire_in.days))
 
 
+@retry(2)
 def http(config, host, url, regex=None, substring=None):
     """
     Check a URL
