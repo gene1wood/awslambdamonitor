@@ -600,13 +600,22 @@ def monitor(event, context):
                         category = host['category']
                         host['config'] = config
                         del host['category']
-                        result = getattr(sys.modules[__name__], category)(
-                            host=hostname, **host)
-                        events.create(result[0],
-                                      result[1],
-                                      hostname,
-                                      category,
-                                      result[2])
+                        try:
+                            result = getattr(sys.modules[__name__], category)(
+                                host=hostname, **host)
+                        except Exception as e:
+                            events.create(
+                                False,
+                                hostname,
+                                hostname,
+                                category,
+                                "Check failed due to exception : %s" % e)
+                        else:
+                            events.create(result[0],
+                                          result[1],
+                                          hostname,
+                                          category,
+                                          result[2])
     except TimeoutError:
         events.create(False,
                       'Timeout',
