@@ -6,6 +6,7 @@ import yaml
 import sys
 import re
 import signal
+from contextlib import closing
 
 # sudo yum install libffi-devel gcc python-devel openssl-devel
 from OpenSSL import SSL
@@ -352,13 +353,14 @@ def dns(config, host, hostname, ip):
         return True, name, "%s resolves to %s" % (hostname, resolved_ips)
 
 
-def port(config, host, port_num):
+def port(config, host, port_num, should_be_listening=True):
     """
     Check that a host is listening on a port
 
     :param config: Unused
     :param host: The host to connect to
     :param port_num: The port to check
+    :param should_be_listening: Whether or not the port should be listening
     :return: 3-tuple of (success, name, message)
         success: Boolean value indicating if there is a problem or not
         name: DNS name
@@ -366,13 +368,19 @@ def port(config, host, port_num):
     """
     del config
     name = "%s:%s" % (host, port_num)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    result = sock.connect_ex((host, port_num))
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        sock.settimeout(3)  # 3 Second Timeout
+        result = sock.connect_ex((host, port_num))
+    is_listening = (result == 0)
+    success = (is_listening == should_be_listening)
     if result == 0:
-        return True, name, "Connected to port %s on %s" % (port_num, host)
+        return (
+            success,
+            name, "Connected to port %s on %s" % (port_num, host))
     else:
-        return (False, name, "Unable to connect to port %s on %s"
-                % (port_num, host))
+        return (
+            success,
+            name, "Unable to connect to port %s on %s" % (port_num, host))
 
 
 def ssh(config, host):
