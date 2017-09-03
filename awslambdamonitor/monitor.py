@@ -259,10 +259,17 @@ def http(config, host, url, regex=None, substring=None):
             return (False, name, "Request timed out after %s seconds. %s" %
                     (timeout, e))
         else:
+            response_data = (
+                vars(r) if ('r' in vars() or 'r' in globals()) else None
+            )
             return (False, name,
                     "Non time-out Exception %s %s : message '%s' and the "
-                    "type of e.message is %s" %
-                    (e.__class__, e, e.message, type(e.message)))
+                    "type of e.message is %s and the response object is %s" %
+                    (e.__class__,
+                     e,
+                     e.message,
+                     type(e.message),
+                     response_data))
     except requests.exceptions.Timeout as e:
         return (False, name, "Request timed out after %s seconds. %s" %
                 (timeout, e))
