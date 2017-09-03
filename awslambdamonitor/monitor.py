@@ -45,15 +45,16 @@ def pst_time(secs):
 logger = logging.getLogger(__name__)
 if len(logging.getLogger().handlers) == 0:
     logger.addHandler(logging.StreamHandler())
-logging.getLogger().setLevel(logging.INFO)
-# fmt = "[%(levelname)s]   %(asctime)s.%(msecs)dZ  %(aws_request_id)s  %(message)s"
-fmt = "[%(levelname)s] %(asctime)s %(message)s\n"
-# datefmt = "%Y-%m-%dT%H:%M:%S"
-datefmt = "%m/%d/%Y %H:%M:%S {}".format(TIME_ZONE.tzname(datetime.now()))
-formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
-formatter.converter = pst_time
-logging.getLogger().handlers[0].setFormatter(formatter)
+else:
+    # fmt = "[%(levelname)s]   %(asctime)s.%(msecs)dZ  %(aws_request_id)s  %(message)s"
+    fmt = "[%(levelname)s] %(asctime)s %(message)s\n"
+    # datefmt = "%Y-%m-%dT%H:%M:%S"
+    datefmt = "%m/%d/%Y %H:%M:%S {}".format(TIME_ZONE.tzname(datetime.now()))
+    formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+    formatter.converter = pst_time
+    logging.getLogger().handlers[0].setFormatter(formatter)
 
+logging.getLogger().setLevel(logging.INFO)
 
 # Disable boto logging
 logging.getLogger('boto3').setLevel(logging.CRITICAL)
