@@ -283,7 +283,7 @@ def http(config, host, url, regex=None, substring=None):
             (r.elapsed.total_seconds(), r.reason))
 
 
-def certificate_age(config, host):
+def certificate_age(config, host, port=443):
     """
     Check a TLS certificate of a host to determine if it's going to expire soon
 
@@ -300,7 +300,7 @@ def certificate_age(config, host):
     name = host
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((host, 443))
+        sock.connect((host, port))
     except Exception as e:
         return False, name, "Exception %s %s" % (e.__class__, e)
     try:
