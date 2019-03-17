@@ -36,19 +36,20 @@ in). Create the zip file as follows
 
 ::
 
-    sudo yum groupinstall 'Development Tools'
-    sudo yum install libyaml-devel libffi-devel openssl-devel
-    virtualenv build-aws-lambda-monitor-environment
-    build-aws-lambda-monitor-environment/bin/pip install pyOpenSSL paramiko ecdsa pycrypto python-whois PyYAML ndg-httpsclient pyasn1 requests
-    pushd build-aws-lambda-monitor-environment/lib/python2.7/dist-packages/
-    zip -r ~/awslambdamonitor.zip *
-    popd
+    sudo yum -y groupinstall 'Development Tools'
+    sudo yum -y install libyaml-devel libffi-devel openssl-devel
 
-    pushd build-aws-lambda-monitor-environment/lib64/python2.7/dist-packages/
-    zip -r ~/awslambdamonitor.zip *
+    mkdir zip
+    # https://github.com/pyca/cryptography/issues/4094#issuecomment-362437755
+    unset PYTHON_INSTALL_LAYOUT
+    printenv PYTHON_INSTALL_LAYOUT
+    pip install pyOpenSSL cryptography paramiko ecdsa pycrypto python-whois PyYAML ndg-httpsclient pyasn1 requests -t zip
+    pushd zip
+    # https://github.com/snowflakedb/examples/issues/4
+    # https://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-python
+    zip -r ~/awslambdamonitor.zip .
     popd
-
-    rm -rf build-aws-lambda-monitor-environment
+    rm -rf zip
 
 scp fetch the file from the amazon linux machine
 ------------------------------------------------
