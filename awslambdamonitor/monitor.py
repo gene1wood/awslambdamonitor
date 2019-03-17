@@ -7,6 +7,7 @@ import sys
 import re
 import signal
 from contextlib import closing
+import traceback
 
 # sudo yum install libffi-devel gcc python-devel openssl-devel
 from OpenSSL import SSL
@@ -218,7 +219,8 @@ def check_expiration_date(asn1, name, threshold):
 
 
 @retry(2)
-def http(config, host, url, regex=None, substring=None):
+def http(config, host, url, regex=None, substring=None, is_json=False,
+         user_agent="awslambdamonitor"):
     """
     Check a URL
 
@@ -227,6 +229,8 @@ def http(config, host, url, regex=None, substring=None):
     :param url: The URL to be fetched
     :param regex: The regular expression to search the response for
     :param substring: The string to search the response for
+    :param is_json: Whether to parse the body as json and interrogate it
+    :param user_agent: The user agent string to pass
     :return: 3-tuple of (success, name, message)
         success: Boolean value indicating if there is a problem or not
         name: DNS name
@@ -235,8 +239,11 @@ def http(config, host, url, regex=None, substring=None):
     del config, host
     name = url
     timeout = 15
+    headers = {
+        'User-Agent': user_agent,
+    }
     try:
-        r = requests.get(url, timeout=timeout)
+        r = requests.get(url, timeout=timeout, headers=headers)
         if (regex is not None) and (substring is not None):
             raise Exception("You can't define a regex and a strcmp value")
         if regex is not None:
@@ -254,6 +261,50 @@ def http(config, host, url, regex=None, substring=None):
                     'Response in %4.3f seconds. Substring "%s" %s' %
                     (r.elapsed.total_seconds(), substring,
                      'found' if substring in r.text else 'not found'))
+        if is_json:
+            result = {}
+            try:
+                data = r.json()
+                assert type(data) is dict, (
+                    'JSON document at %s is %s not dict' % (name, type(data)))
+                assert len(data) > 0, (
+                    'JSON document at %s contains empty dict' % name)
+            except Exception as e:
+                return (False, name, repr(e.message))
+            logger.info("data is %s containing %s" % (type(data), data))
+            for key in data:
+                logger.info("key is %s containing %s" % (type(key), key))
+                logger.info("data keys are %s" % data.keys())
+                testtest = key in data
+                logger.info("key in data is %s" % testtest)
+                logger.info("data[key] is %s containing %s" % (type(data[key]), data[key]))
+
+                if type(data[key]) == bool:
+                    result[key] = (
+                        data[key], '%s is %s' % (key, data[key]))
+                elif type(data[key]) == dict and 'status' in data[key]:
+                    # {'status': False, 'description': 'foo'}
+                    result[key] = (
+                        result[key]['status'],
+                        result[key].get(
+                            'description',
+                            '%s is %s' % (key, data[key]['status']))
+                    )
+                else:
+                    result[key] = (
+                        True, 'Ignoring key %s of type %s' % (
+                            key, type(data[key])))
+                if all([result[x][0] for x in result]):
+                    return (
+                        True, name,
+                        'Response in %4.3f seconds. Keys %s all pass' %
+                        (r.elapsed.total_seconds(), result.keys()))
+                else:
+                    return(
+                        False, name, 'Some keys are false: %s' %
+                        ['%s: %s' % (x, result[x][1]) for x in result]
+                    )
+
     except requests.exceptions.ConnectionError as e:
         if 'timed out' in repr(e.message):
             return (False, name, "Request timed out after %s seconds. %s" %
@@ -278,7 +329,8 @@ def http(config, host, url, regex=None, substring=None):
     except TimeoutError:
         raise
     except Exception as e:
-        return False, name, "Exception %s %s" % (e.__class__, e)
+        return False, name, "Exception %s %s with traceback %s" % (
+            e.__class__, e, traceback.format_exc(None))
     return (r.ok, name, 'Response in %4.3f seconds. %s' %
             (r.elapsed.total_seconds(), r.reason))
 
@@ -581,7 +633,14 @@ def monitor(event, context):
     timeout_reached = False
     events = Events()
     with open('monitor.yaml') as f:
-        config = yaml.load(f.read())
+        try:
+            config = yaml.load(f.read())
+        except yaml.YAMLError, exc:
+            if hasattr(exc, 'problem_mark'):
+                mark = exc.problem_mark
+                print "Error position: (%s:%s)" % (
+                    mark.line + 1, mark.column + 1)
+                raise
     try:
         with Timeout(seconds=timeout):
 
@@ -601,21 +660,22 @@ def monitor(event, context):
                         host['config'] = config
                         del host['category']
                         try:
-                            result = getattr(sys.modules[__name__], category)(
-                                host=hostname, **host)
+                            success, name, message = getattr(
+                                sys.modules[__name__],
+                                category)(host=hostname, **host)
                         except Exception as e:
                             events.create(
                                 False,
                                 hostname,
                                 hostname,
                                 category,
-                                "Check failed due to exception : %s" % e)
+                                "Check failed due to exception : %s and traceback %s" % (e, traceback.format_exc(None)))
                         else:
-                            events.create(result[0],
-                                          result[1],
+                            events.create(success,
+                                          name,
                                           hostname,
                                           category,
-                                          result[2])
+                                          message)
     except TimeoutError:
         events.create(False,
                       'Timeout',
@@ -650,10 +710,25 @@ def main():
 
     :return:
     """
+    # event = {
+    #     'resources':
+    #     ['arn:aws:events:us-west-2:123456789123:rule/AWSLambdaMonitor5Minutes',
+    #      'arn:aws:events:us-west-2:123456789123:rule/AWSLambdaMonitorDaily']}
     event = {
-        'resources':
-        ['arn:aws:events:us-west-2:123456789123:rule/AWSLambdaMonitor5Minutes',
-         'arn:aws:events:us-west-2:123456789123:rule/AWSLambdaMonitorDaily']}
+        'Records': [
+            {
+                'eventSource': 'aws:ses',
+                'ses': {
+                    'mail': {
+                        'commonHeaders': {
+                            'subject': 'AWSLambdaMonitorHildaTest'
+                        }
+                    }
+                }
+            }
+        ]
+    }
+    logging.getLogger().setLevel(logging.DEBUG)
     context = type('context', (), {'log_stream_name': None})()
     result = monitor(event, context)
     print(result)
